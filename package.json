@@ -4,14 +4,16 @@
   "description": "本地批量图片压缩 CLI：sharp 驱动的压缩 / 旋转 / 裁剪 / 水印 / 格式转换 / HTML 感知压缩，无需联网、无次数限制",
   "type": "module",
   "bin": {
-    "compress-img": "bin/cli.js"
+    "compress-img": "bin/cli.js",
+    "compress-img-web": "bin/web.js"
   },
   "exports": {
     ".": "./lib/compress.js"
   },
   "scripts": {
-    "test": "node test/run.mjs",
-    "compress": "node bin/cli.js"
+    "test": "node test/run.mjs && node --test --test-force-exit test/*.test.mjs",
+    "compress": "node bin/cli.js",
+    "web": "node bin/web.js"
   },
   "engines": {
     "node": ">=18.17"

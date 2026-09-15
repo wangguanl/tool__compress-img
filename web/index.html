@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>图片压缩 · 本地处理</title>
+	<link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+	<header class="topbar">
+		<div class="topbar-inner">
+			<div class="brand">
+				<span class="brand-dot"></span>
+				<h1>图片压缩</h1>
+				<span class="brand-tag">本地处理 · 不上传云端</span>
+			</div>
+			<div class="controls">
+				<label class="ctl">
+					<span class="ctl-label">质量 <b id="qualityVal">75</b></span>
+					<input type="range" id="quality" min="1" max="100" value="75" />
+				</label>
+				<label class="ctl">
+					<span class="ctl-label">格式</span>
+					<select id="format">
+						<option value="auto" selected>保持原格式</option>
+						<option value="jpg">JPG</option>
+						<option value="png">PNG</option>
+						<option value="webp">WebP</option>
+						<option value="avif">AVIF（编码较慢）</option>
+					</select>
+				</label>
+			</div>
+		</div>
+	</header>
+
+	<main>
+		<section id="dropzone" class="dropzone" aria-label="投放区">
+		<div class="dz-inner">
+			<svg class="dz-icon" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+				<polyline points="17 8 12 3 7 8" />
+				<line x1="12" y1="3" x2="12" y2="15" />
+			</svg>
+			<p class="dz-title">选择文件 / 文件夹，或拖拽到此处</p>
+			<p class="dz-sub">选择方式走本地路径直读（不上传）；拖拽走浏览器上传 · 支持 jpg / png / webp / avif / tiff / gif</p>
+			<div class="dz-actions">
+				<input type="file" id="fileInput" multiple accept=".jpg,.jpeg,.png,.webp,.avif,.tif,.tiff,.gif" hidden />
+				<input type="file" id="dirInput" webkitdirectory hidden />
+				<button class="btn" id="pickFiles">选择文件…</button>
+				<button class="btn" id="pickDir">选择文件夹…</button>
+				<button class="btn btn-primary" id="startBtn" disabled>开始压缩</button>
+			</div>
+			<p class="dz-fallback" id="pickFallback" hidden>
+				<button class="btn btn-link" id="pickFilesFallback">浏览器选择文件</button> ·
+				<button class="btn btn-link" id="pickDirFallback">浏览器选择文件夹</button>
+			</p>
+		</div>
+	</section>
+
+		<section id="resultArea" class="result-area" hidden>
+			<div class="summary">
+				<div class="summary-text" id="summaryText">—</div>
+				<div class="summary-actions">
+					<button class="btn" id="zipBtn" disabled>打包下载 ZIP</button>
+					<button class="btn" id="clearBtn">清空</button>
+				</div>
+			</div>
+			<div class="table-head">
+				<span class="col-thumb"></span>
+				<span class="col-name">文件</span>
+				<span class="col-size">体积</span>
+				<span class="col-ratio">压缩率</span>
+				<span class="col-act"></span>
+			</div>
+			<ul id="list" class="list" aria-live="polite"></ul>
+		</section>
+	</main>
+
+	<script src="/app.js"></script>
+</body>
+</html>

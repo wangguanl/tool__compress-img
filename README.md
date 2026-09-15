@@ -1,6 +1,6 @@
 # compress-img
 
-本地批量图片压缩 CLI，[sharp](https://sharp.pixelplumbing.com) 0.35 驱动。**不联网、无 API key、无次数限制**。
+本地批量图片压缩工具（CLI + Web UI），[sharp](https://sharp.pixelplumbing.com) 0.35 驱动。**不联网、无 API key、无次数限制**。
 
 ## 功能
 
@@ -12,11 +12,26 @@
 - 渐进式输出、无损模式（webp/avif）、EXIF/GPS 元数据默认清除
 - 并发压缩（默认 8）、不覆盖保护、单张失败不中断整批
 
+## Web UI（图形界面）
+
+不想敲命令行时，用浏览器操作：选择文件/文件夹或直接拖拽，页面上看前后体积对比，单张下载或打包 ZIP。
+
+```bash
+npm run web                    # 默认 http://127.0.0.1:7788，自动打开浏览器
+npm run web -- --port 8080     # 指定起始端口（占用自动顺延）
+npm run web -- --no-open       # 不自动开浏览器
+npm run web -- --max-mb 200    # 单文件上限，默认 100MB
+```
+
+页面能力：质量滑块（1-100）、格式转换（保持原格式/JPG/PNG/WebP/AVIF）、递归文件夹选择与拖拽、并发压缩（3 路）、失败单张重试、改参数后逐张重压、ZIP 打包下载（保留子目录结构）。
+
+技术形态：原生 `node:http` + vanilla JS 单页，零额外依赖（ZIP 为内置 STORED 打包器）；仅绑定 127.0.0.1 本机访问；图片在本机处理，压缩结果存于会话临时目录，Ctrl+C 退出自动清理。前后端同进程部署但代码分离（`web/` 静态页 + `lib/server.js` JSON API）。
+
 ## 安装
 
 ```bash
 npm install            # 安装 sharp 依赖
-npm link               # 可选：注册全局命令 compress-img
+npm link               # 可选：注册全局命令 compress-img / compress-img-web
 ```
 
 ## 用法
@@ -90,8 +105,10 @@ console.log(`省了 ${result.bytesSaved} 字节`);
 ## 测试
 
 ```bash
-node --test test/compress.test.mjs   # 12 个单元测试
-npm test                             # 目录模式 + 组合功能冒烟测试
+node --test test/compress.test.mjs   # 12 个压缩单元测试
+node --test test/web.test.mjs        # 9 个 Web API 集成测试
+node --test test/zip.test.mjs        # 5 个 ZIP 打包测试
+npm test                             # 全部 26 项（冒烟 + 单测 + 集成）
 ```
 
 ## 从 legacy 迁移
@@ -109,9 +126,13 @@ npm test                             # 目录模式 + 组合功能冒烟测试
 
 ```
 bin/cli.js        命令行入口
+bin/web.js        Web 服务入口
 lib/compress.js   压缩管线（可编程调用）
 lib/cli.js        参数解析 / 目录扫描 / 进度输出
+lib/server.js     Web 服务：路由 / 上传 / 端口探测 / 会话管理
+lib/zip.js        零依赖 ZIP(STORED) 打包器
 lib/util.js       常量与小工具
-test/             单元测试 + 冒烟测试
+web/              Web UI（原生单页：index.html / app.css / app.js）
+test/             单元测试 + 冒烟测试 + 集成测试
 legacy/           归档的旧脚本（2021 年版）
 ```
