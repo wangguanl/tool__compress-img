@@ -5,6 +5,7 @@
 ## 功能
 
 - 批量压缩：递归扫描目录，保留子目录结构，默认输出到 `<输入>/compressed`
+- **URL 直接输入**：`compress-img <https://...>` 自动下载 → 压缩 → 只保留压缩结果（依赖 `@wgl-m/down-img` monorepo 包，多输入可与本地路径混用）
 - 7 种格式互转：jpg / png / webp / avif / tiff / gif（含 heic 解码输入）
 - 质量、缩放、居中/偏移裁剪、90° 步进旋转
 - 文字水印（字号自适应图宽）与图片水印（支持透明度）
@@ -30,14 +31,19 @@ npm run web -- --max-mb 200    # 单文件上限，默认 100MB
 ## 安装
 
 ```bash
-npm install            # 安装 sharp 依赖
-npm link               # 可选：注册全局命令 compress-img / compress-img-web
+pnpm install             # 安装 sharp；@wgl-m/down-img 经 workspace 协议链接 monorepo 包
+npm link                 # 可选：注册全局命令 compress-img / compress-img-web（bin 软链）
 ```
+
+> **包管理器**：本项目已从 npm 迁移到 **pnpm**（依赖 `@wgl-m/down-img` 为 pnpm 专有的 `workspace:*` 协议，npm 不支持）。
+> **workspace 链接**：`pnpm-workspace.yaml` 将 `../wgl-monorepo/packages/down-img` 纳入 workspace，链接指向包的 `dist/` 产物——改 down-img 源码后需 `pnpm --filter @wgl-m/down-img build` 重建才生效（在 monorepo 目录执行）。
+> **发版后**：`pnpm add @wgl-m/down-img` 替换 workspace 协议，并从 `pnpm-workspace.yaml` 移除 monorepo 路径。
 
 ## 用法
 
 ```bash
-node bin/cli.js <文件|目录> [选项]
+node bin/cli.js <文件|目录|URL> [选项]
+node bin/cli.js <输入...> [选项]      # 多输入混用：本地路径 + http(s) URL
 ```
 
 | 选项 | 说明 |
@@ -78,6 +84,13 @@ compress-img photo.jpg -o out.jpg --wm-text "© 2026" --wm-pos southeast
 
 # 居中裁剪 + 无损 avif
 compress-img banner.png --crop 1200x600 --format avif --lossless
+
+# 直接压缩网络图片（下载 → 压缩 → 输出 photo.min.jpg 到当前目录）
+compress-img https://example.com/photo.jpg -q 80
+
+# 多个 URL / URL 与本地混用
+compress-img https://a.com/1.png https://a.com/2.png --out-dir ./dist
+compress-img https://a.com/cover.jpg ./local-photos --out-dir ./dist
 ```
 
 ## 实测压缩率（sharp 0.35.4，q75）
@@ -106,9 +119,10 @@ console.log(`省了 ${result.bytesSaved} 字节`);
 
 ```bash
 node --test test/compress.test.mjs   # 12 个压缩单元测试
+node --test test/url.test.mjs        # 6 个 URL 输入集成测试（本地 HTTP 服务，无外网依赖）
 node --test test/web.test.mjs        # 9 个 Web API 集成测试
 node --test test/zip.test.mjs        # 5 个 ZIP 打包测试
-npm test                             # 全部 26 项（冒烟 + 单测 + 集成）
+npm test                             # 全部 39 项 + 冒烟
 ```
 
 ## 从 legacy 迁移

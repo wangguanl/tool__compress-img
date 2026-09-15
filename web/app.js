@@ -14,6 +14,8 @@ const els = {
 	pickFallback: $("pickFallback"),
 	pickFilesFallback: $("pickFilesFallback"),
 	pickDirFallback: $("pickDirFallback"),
+	urlInput: $("urlInput"),
+	addUrlBtn: $("addUrlBtn"),
 	startBtn: $("startBtn"),
 	quality: $("quality"),
 	qualityVal: $("qualityVal"),
@@ -26,7 +28,8 @@ const els = {
 };
 
 const IMAGE_RE = /\.(jpe?g|png|webp|avif|tiff?|gif)$/i;
-const items = []; // { key, mode: 'path'|'upload', absPath?, file?, size, relPath, status, result?, error?, params?, row?, thumbUrl? }
+const URL_RE = /^https?:\/\/\S+$/i;
+const items = []; // { key, mode: 'path'|'upload'|'url', absPath?, file?, url?, size, relPath, status, result?, error?, params?, row?, thumbUrl? }
 let keySeq = 0;
 let running = 0;
 const CONCURRENCY = 3;
@@ -38,6 +41,49 @@ function snapshotParams() {
 }
 
 els.quality.addEventListener("input", () => (els.qualityVal.textContent = els.quality.value));
+
+/* ---------------- URL 添加（远程图片） ---------------- */
+function addUrls() {
+	const raw = els.urlInput.value.trim();
+	if (!raw) return;
+	const urls = raw.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+	const bad = urls.filter((u) => !URL_RE.test(u));
+	const good = urls.filter((u) => URL_RE.test(u));
+
+	let added = 0;
+	for (const url of good) {
+		if (items.some((it) => it.url === url)) continue;
+		const name = urlName(url);
+		items.push({ key: `k${keySeq++}`, mode: "url", url, relPath: name, size: 0, status: "queued" });
+		added++;
+	}
+	if (added) {
+		renderAll();
+		showResult();
+	}
+	if (bad.length) alert(`以下不是合法的 http(s) 链接，已跳过：\n${bad.join("\n")}`);
+	els.urlInput.value = "";
+}
+
+/** 从 URL 提取显示名：去 query/hash，取路径末段；无末段时用整个 URL 短名 */
+function urlName(url) {
+	try {
+		const u = new URL(url);
+		let last = decodeURIComponent(u.pathname.split("/").filter(Boolean).pop() || "");
+		last = last.replace(/[\\/:*?"<>|]/g, "_");
+		return last || `${u.hostname}.jpg`;
+	} catch {
+		return "image.jpg";
+	}
+}
+
+els.addUrlBtn.addEventListener("click", addUrls);
+els.urlInput.addEventListener("keydown", (e) => {
+	if (e.key === "Enter") {
+		e.preventDefault();
+		addUrls();
+	}
+});
 
 /* ---------------- 系统选择框（路径直读） ---------------- */
 async function systemPick(kind) {
@@ -192,18 +238,18 @@ function paintRow(li, it) {
 	const { status, result, error } = it;
 	const params = it.params || {};
 	const thumb = it.thumbUrl
-		? `<img class="thumb" src="${it.thumbUrl}" alt="" />`
+		? `<img class="thumb" src="${it.thumbUrl}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'thumb-placeholder',textContent:'✕'}))" />`
 		: `<div class="thumb-placeholder">${extOf(it.relPath) || "?"}</div>`;
 
 	let ratio = `<span class="ratio pending">—</span>`;
-	let sizes = `<span class="sizes">${fmt(it.size)}</span>`;
+	let sizes = `<span class="sizes">${it.size ? fmt(it.size) : "—"}</span>`;
 	let act = "";
 
 	if (status === "queued") {
-		ratio = `<span class="ratio pending">待处理</span>`;
+		ratio = `<span class="ratio pending">${it.mode === "url" ? "待下载" : "待处理"}</span>`;
 		act = `<button data-act="remove">移除</button>`;
 	} else if (status === "running") {
-		ratio = `<span class="ratio pending">压缩中…</span>`;
+		ratio = `<span class="ratio pending">${it.mode === "url" ? "下载并压缩中…" : "压缩中…"}</span>`;
 	} else if (status === "done" && result) {
 		const pct = (1 - result.afterBytes / result.beforeBytes) * 100;
 		const down = pct >= 0;
@@ -215,7 +261,9 @@ function paintRow(li, it) {
 		act = `<button data-act="redo">重试</button><button data-act="remove">移除</button>`;
 	}
 
-	const subParts = [`${fmt(it.size)} · ${extOf(it.relPath).toUpperCase()}${it.mode === "path" ? " · 本地直读" : " · 拖拽上传"}`];
+	const subParts = [
+		`${it.size ? fmt(it.size) : "—"} · ${extOf(it.relPath).toUpperCase() || "URL"}${modeLabel(it.mode)}`,
+	];
 	if (status === "done" && result) subParts.push(`q${params.quality} · ${result.format}`);
 	if (status === "failed" && error) subParts.push(`<span class="err-msg">${esc(error)}</span>`);
 
@@ -298,9 +346,10 @@ async function startItem(it) {
 	running++;
 	it.status = "running";
 	it.params = snapshotParams();
-	// 缩略图：upload 模式有 File 对象；path 模式从服务端取小图
+	// 缩略图：upload 用本地 File；path 走服务端小图；url 直接用远程地址（浏览器原生加载，可能因防盗链失败，失败显示占位）
 	if (!it.thumbUrl && it.mode === "upload") it.thumbUrl = URL.createObjectURL(it.file);
 	if (!it.thumbUrl && it.mode === "path") it.thumbUrl = `/api/thumb?path=${encodeURIComponent(it.absPath)}`;
+	if (!it.thumbUrl && it.mode === "url") it.thumbUrl = it.url;
 	if (it.row) paintRow(it.row, it);
 	updateSummary();
 
@@ -311,6 +360,12 @@ async function startItem(it) {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ path: it.absPath, relPath: it.relPath, ...it.params }),
+			});
+		} else if (it.mode === "url") {
+			res = await fetch("/api/compress-url", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ url: it.url, ...it.params }),
 			});
 		} else {
 			const q = new URLSearchParams({
@@ -328,7 +383,7 @@ async function startItem(it) {
 		const data = await res.json();
 		if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
 		it.result = data;
-		it.size = data.beforeBytes; // 以服务端实测为准
+		it.size = data.beforeBytes; // 以服务端实测为准（URL 模式为下载后体积）
 		it.status = "done";
 	} catch (err) {
 		it.error = err.message;
@@ -377,6 +432,11 @@ els.clearBtn.addEventListener("click", async () => {
 });
 
 /* ---------------- 小工具 ---------------- */
+function modeLabel(mode) {
+	if (mode === "path") return " · 本地直读";
+	if (mode === "url") return " · 远程下载";
+	return " · 拖拽上传";
+}
 function fmt(bytes) {
 	if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 	return `${(bytes / 1024).toFixed(1)} KB`;

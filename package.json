@@ -1,7 +1,7 @@
 {
   "name": "compress-img",
   "version": "1.0.0",
-  "description": "本地批量图片压缩 CLI：sharp 驱动的压缩 / 旋转 / 裁剪 / 水印 / 格式转换 / HTML 感知压缩，无需联网、无次数限制",
+  "description": "本地批量图片压缩 CLI：sharp 驱动的压缩 / 旋转 / 裁剪 / 水印 / 格式转换 / URL 直接输入，无需联网、无次数限制",
   "type": "module",
   "bin": {
     "compress-img": "bin/cli.js",
@@ -20,6 +20,8 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@wgl-m/down-img": "workspace:*",
     "sharp": "^0.35.4"
-  }
+  },
+  "packageManager": "pnpm@9.15.0"
 }
