@@ -29,9 +29,98 @@
 						<option value="avif">AVIF（编码较慢）</option>
 					</select>
 				</label>
+				<button class="btn btn-ghost" id="advToggle" aria-expanded="false">高级设置 ▾</button>
 			</div>
 		</div>
 	</header>
+
+	<section id="advPanel" class="adv-panel" hidden>
+		<div class="adv-grid">
+			<div class="adv-group">
+				<div class="adv-title">尺寸与方向</div>
+
+				<div class="adv-sub">等比缩小（按最长边）</div>
+				<div class="adv-chips" id="resizeChips">
+					<button type="button" class="chip is-on" data-v="" data-group="resize">原始尺寸</button>
+					<button type="button" class="chip" data-v="2400" data-group="resize">≤2400</button>
+					<button type="button" class="chip" data-v="1920" data-group="resize">≤1920</button>
+					<button type="button" class="chip" data-v="1440" data-group="resize">≤1440</button>
+					<button type="button" class="chip" data-v="1080" data-group="resize">≤1080</button>
+				</div>
+				<div class="adv-row adv-freetext">
+					<input type="text" id="resizeCustom" placeholder="或输入自定义最长边（如 800，留空禁用）" spellcheck="false" />
+				</div>
+
+				<div class="adv-sub">裁剪（按比例，居中）</div>
+				<div class="adv-chips" id="cropRatioChips">
+					<button type="button" class="chip is-on" data-v="" data-group="crop">不裁剪</button>
+					<button type="button" class="chip" data-v="1:1" data-group="crop">1:1 方图</button>
+					<button type="button" class="chip" data-v="4:3" data-group="crop">4:3</button>
+					<button type="button" class="chip" data-v="16:9" data-group="crop">16:9 横屏</button>
+					<button type="button" class="chip" data-v="3:4" data-group="crop">3:4 竖图</button>
+					<button type="button" class="chip" data-v="9:16" data-group="crop">9:16 竖屏</button>
+				</div>
+				<div class="adv-row adv-freetext adv-crop">
+					<input type="text" id="cropCustom" placeholder="自定义：WxH 或 WxH+X+Y（留空禁用）" spellcheck="false" />
+				</div>
+
+				<div class="adv-sub">旋转</div>
+				<div class="adv-chips" id="rotateChips">
+					<button type="button" class="chip is-on" data-v="0" data-group="rotate">不旋转</button>
+					<button type="button" class="chip" data-v="90" data-group="rotate">90°</button>
+					<button type="button" class="chip" data-v="180" data-group="rotate">180°</button>
+					<button type="button" class="chip" data-v="270" data-group="rotate">270°</button>
+				</div>
+			</div>
+			<div class="adv-group">
+				<div class="adv-title">水印</div>
+				<div class="adv-sub">文字水印</div>
+				<label class="adv-row adv-row-free">
+					<span>文字</span>
+					<input type="text" id="wmTextInput" placeholder="如 © 2026（文字/图片二选一）" spellcheck="false" />
+				</label>
+				<div class="adv-sub">图片水印</div>
+				<div class="adv-freetext adv-wmimg">
+					<input type="text" id="wmImgInput" placeholder="本地路径或 https:// 链接" spellcheck="false" />
+					<button type="button" class="btn btn-ghost btn-sm" id="wmPickBtn">选择文件…</button>
+					<button type="button" class="btn btn-ghost btn-sm" id="wmClearBtn">清除</button>
+				</div>
+				<span class="adv-swat" id="wmSwatch" hidden></span>
+				<label class="adv-row">
+					<span>位置</span>
+					<select id="wmPosInput">
+						<option value="southeast" selected>右下</option>
+						<option value="southwest">左下</option>
+						<option value="northeast">右上</option>
+						<option value="northwest">左上</option>
+						<option value="center">居中</option>
+					</select>
+				</label>
+				<label class="adv-row">
+					<span>不透明度 <b id="wmOpacityVal">0.6</b></span>
+					<input type="range" id="wmOpacityInput" min="0.1" max="1" step="0.1" value="0.6" />
+				</label>
+			</div>
+			<div class="adv-group">
+				<div class="adv-title">编码</div>
+				<label class="adv-row adv-check">
+					<input type="checkbox" id="losslessInput" />
+					<span>无损压缩（webp / avif）</span>
+				</label>
+				<label class="adv-row adv-check">
+					<input type="checkbox" id="keepMetaInput" />
+					<span>保留 EXIF/GPS 元数据（默认清除）</span>
+				</label>
+				<div class="adv-sub" style="margin-top:14px">已上传的水印图</div>
+				<ul class="adv-wmlist" id="wmPendingList"></ul>
+				<div class="adv-actions">
+					<button type="button" class="btn btn-ghost" id="advReset">恢复默认</button>
+				</div>
+				<p class="adv-hint">参数对「开始压缩」时所有待处理项生效；改参数后可对已完成项点「重压」。</p>
+			</div>
+			<input type="file" id="wmFileInput" accept="image/*" hidden />
+		</div>
+	</section>
 
 	<main>
 		<section id="dropzone" class="dropzone" aria-label="投放区">
@@ -79,6 +168,27 @@
 			<ul id="list" class="list" aria-live="polite"></ul>
 		</section>
 	</main>
+
+	<!-- 前后对比预览 -->
+	<div id="previewLayer" class="preview-layer" hidden>
+		<div class="preview-box">
+			<div class="preview-head">
+				<span class="preview-name" id="pName"></span>
+				<span class="preview-verdict" id="pVerdict"></span>
+				<button type="button" class="btn btn-ghost btn-sm" id="pClose">✕</button>
+			</div>
+			<div class="preview-panes">
+				<figure class="preview-pane">
+					<figcaption>原图 <b id="pBeforeMeta"></b></figcaption>
+					<div class="preview-imgwrap"><img id="pBeforeImg" alt="原图" /></div>
+				</figure>
+				<figure class="preview-pane">
+					<figcaption>压缩后 <b id="pAfterMeta"></b></figcaption>
+					<div class="preview-imgwrap"><img id="pAfterImg" alt="压缩后" /></div>
+				</figure>
+			</div>
+		</div>
+	</div>
 
 	<script src="/app.js"></script>
 </body>

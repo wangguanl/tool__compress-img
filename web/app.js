@@ -16,6 +16,25 @@ const els = {
 	pickDirFallback: $("pickDirFallback"),
 	urlInput: $("urlInput"),
 	addUrlBtn: $("addUrlBtn"),
+	advToggle: $("advToggle"),
+	advPanel: $("advPanel"),
+	advReset: $("advReset"),
+	resizeChips: $("resizeChips"),
+	resizeCustom: $("resizeCustom"),
+	cropRatioChips: $("cropRatioChips"),
+	cropCustom: $("cropCustom"),
+	rotateChips: $("rotateChips"),
+	wmTextInput: $("wmTextInput"),
+	wmImgInput: $("wmImgInput"),
+	wmPickBtn: $("wmPickBtn"),
+	wmClearBtn: $("wmClearBtn"),
+	wmFileInput: $("wmFileInput"),
+	wmPosInput: $("wmPosInput"),
+	wmOpacityInput: $("wmOpacityInput"),
+	wmOpacityVal: $("wmOpacityVal"),
+	wmPendingList: $("wmPendingList"),
+	losslessInput: $("losslessInput"),
+	keepMetaInput: $("keepMetaInput"),
 	startBtn: $("startBtn"),
 	quality: $("quality"),
 	qualityVal: $("qualityVal"),
@@ -25,6 +44,15 @@ const els = {
 	zipBtn: $("zipBtn"),
 	clearBtn: $("clearBtn"),
 	list: $("list"),
+};
+
+// 高级设置状态：chips 选中值 + 自定义覆盖（优先级：自定义 > chip）
+const adv = {
+	resize: "", // 最长边数字字符串，"" = 不缩放
+	cropRatio: "", // 比例如 "1:1"，"" = 不裁剪
+	cropCustom: "",
+	rotate: 0,
+	wm: null, // { text | remoteImg | sessionPath }
 };
 
 const IMAGE_RE = /\.(jpe?g|png|webp|avif|tiff?|gif)$/i;
@@ -37,10 +65,188 @@ let pickAvailable = true;
 
 /* ---------------- 参数 ---------------- */
 function snapshotParams() {
-	return { quality: Number(els.quality.value), format: els.format.value };
+	const p = { quality: Number(els.quality.value), format: els.format.value };
+
+	// 最长边单值 → "Nx1"（fit inside 等比，Wx1 表示最大宽 N、高度不约束）
+	if (adv.resize) p.resize = `${adv.resize}x1`;
+
+	const crop = adv.cropCustom.trim() ? adv.cropCustom.trim() : adv.cropRatio;
+	if (crop) p.crop = crop;
+
+	if (adv.rotate) p.rotate = adv.rotate;
+
+	if (adv.wm) {
+		p.watermark = {
+			position: els.wmPosInput.value,
+			opacity: Number(els.wmOpacityInput.value),
+			text: adv.wm.text || undefined,
+			img: adv.wm.remoteImg || adv.wm.sessionPath || undefined,
+		};
+		// 首选文字水印；只发其中一个，避免同时传
+		if (adv.wm.text === undefined) delete p.watermark.text;
+		if (adv.wm.remoteImg === undefined && adv.wm.sessionPath === undefined) delete p.watermark.img;
+	}
+
+	if (els.losslessInput.checked) p.lossless = true;
+	if (els.keepMetaInput.checked) p.keepMeta = true;
+
+	return p;
 }
 
+/** 校验高级参数，返回错误消息或 null */
+function validateParams(p) {
+	if (p.resize && !/^\d+x\d+$/.test(p.resize)) return `缩放格式应为 WxH，如 1920x1080`;
+	if (p.crop && !/^(\d+:\d+|\d+x\d+(\+\d+\+\d+)?)$/.test(p.crop)) return `裁剪格式应为 W:H 或 WxH 或 WxH+X+Y`;
+	if (p.watermark && !adv.wm) return `水印配置无效`;
+	if (adv.wm == null && (els.wmImgInput.value.trim() || els.wmTextInput.value.trim())) return `文字/图片水印未成功选择`;
+	return null;
+}
+
+/** 行内参数摘要（标注当前用了哪些高级项） */
+function paramsSummary(p) {
+	const parts = [`q${p.quality}`];
+	if (p.format !== "auto") parts.push(p.format);
+	if (p.resize) parts.push(`缩放≤${p.resize.split("x")[0]}`);
+	if (p.crop) parts.push(p.crop.includes(":") ? `裁剪${p.crop}` : `裁剪${p.crop}`);
+	if (p.rotate) parts.push(`旋转${p.rotate}°`);
+	if (p.watermark) parts.push(p.watermark.text ? `水印"${p.watermark.text}"` : "图片水印");
+	if (p.lossless) parts.push("无损");
+	if (p.keepMeta) parts.push("留元数据");
+	return parts.join(" · ");
+}
+
+/* ---------- 高级面板交互 ---------- */
+// chips 单选组
+function chipGroup(el) {
+	el.addEventListener("click", (e) => {
+		const btn = e.target.closest(".chip");
+		if (!btn) return;
+		el.querySelectorAll(".chip").forEach((c) => c.classList.remove("is-on"));
+		btn.classList.add("is-on");
+		syncAdvState();
+	});
+}
+function chipValue(group) {
+	const on = els[group].querySelector(".chip.is-on");
+	return on ? on.dataset.v : "";
+}
+function syncAdvState() {
+	adv.resize = els.resizeCustom.value.trim() || chipValue("resizeChips");
+	adv.cropRatio = els.cropCustom.value.trim() ? "" : chipValue("cropRatioChips");
+	adv.cropCustom = els.cropCustom.value.trim();
+	adv.rotate = Number(chipValue("rotateChips")) || 0;
+	renderWmUi();
+}
+els.resizeCustom.addEventListener("input", syncAdvState);
+els.cropCustom.addEventListener("input", syncAdvState);
+chipGroup(els.resizeChips);
+chipGroup(els.cropRatioChips);
+chipGroup(els.rotateChips);
+
 els.quality.addEventListener("input", () => (els.qualityVal.textContent = els.quality.value));
+els.wmOpacityInput.addEventListener("input", () => (els.wmOpacityVal.textContent = els.wmOpacityInput.value));
+
+/* 高级面板开关 */
+els.advToggle.addEventListener("click", () => {
+	const open = els.advPanel.hidden;
+	els.advPanel.hidden = !open;
+	els.advToggle.setAttribute("aria-expanded", String(open));
+	els.advToggle.textContent = open ? "高级设置 ▴" : "高级设置 ▾";
+});
+
+/* 恢复默认：重置 chips/输入/水印 */
+els.advReset.addEventListener("click", () => {
+	els.resizeCustom.value = "";
+	els.cropCustom.value = "";
+	els.wmTextInput.value = "";
+	els.wmImgInput.value = "";
+	adv.resize = "";
+	adv.cropRatio = "";
+	adv.cropCustom = "";
+	adv.rotate = 0;
+	adv.wm = null;
+	document.querySelectorAll(".chip").forEach((c) => c.classList.toggle("is-on", c.dataset.v === ""));
+	els.wmPosInput.value = "southeast";
+	els.wmOpacityInput.value = "0.6";
+	els.wmOpacityVal.textContent = "0.6";
+	els.losslessInput.checked = false;
+	els.keepMetaInput.checked = false;
+	renderWmUi();
+});
+
+/* ---------- 水印输入 ---------- */
+function renderWmUi() {
+	// 已填写的会话水印图（来自 wm-upload）放入待办列表
+	const stashed = advWmSessionPaths();
+	els.wmPendingList.replaceChildren(...stashed.map((p) => {
+		const li = document.createElement("li");
+		li.textContent = selectedWmLabel(p);
+		li.dataset.tmp = "1";
+		return li;
+	}));
+	if (adv.wm) {
+		if (adv.wm.text) els.wmTextInput.value = adv.wm.text;
+		else if (adv.wm.remoteImg) els.wmImgInput.value = adv.wm.remoteImg;
+	}
+}
+function advWmSessionPaths() {
+	// 维护一个会话内已上传水印图的模块级数组
+	return advSessionWm;
+}
+const advSessionWm = [];
+function selectedWmLabel(p) {
+	return `已上传水印图：${p.split(/[\\/]/).pop()}（将作用于所有图）`;
+}
+els.wmPickBtn.addEventListener("click", () => els.wmFileInput.click());
+els.wmFileInput.addEventListener("change", async () => {
+	const f = els.wmFileInput.files && els.wmFileInput.files[0];
+	if (f) await uploadWmFile(f);
+	els.wmFileInput.value = "";
+});
+async function uploadWmFile(file) {
+	const q = new URLSearchParams({ name: file.name });
+	const res = await fetch(`/api/wm-upload?${q}`, {
+		method: "POST",
+		headers: { "Content-Type": file.type || "application/octet-stream" },
+		body: file,
+	});
+	if (!res.ok) {
+		alert((await res.json().catch(() => ({ error: "上传失败" }))).error);
+		return;
+	}
+	const d = await res.json();
+	adv.wm = { sessionPath: d.path };
+	els.wmTextInput.value = "";
+	els.wmImgInput.value = d.path;
+	advSessionWm.push(d.path);
+	renderWmUi();
+}
+els.wmClearBtn.addEventListener("click", () => {
+	adv.wm = null;
+	els.wmTextInput.value = "";
+	els.wmImgInput.value = "";
+	renderWmUi();
+});
+
+// 手动输入文字/远程图片水印：实时追踪
+els.wmTextInput.addEventListener("input", () => {
+	const t = els.wmTextInput.value.trim();
+	if (t) {
+		adv.wm = { text: t };
+		els.wmImgInput.value = "";
+	} else if (adv.wm && !adv.wm.sessionPath && !adv.wm.remoteImg && !els.wmImgInput.value.trim()) {
+		adv.wm = null;
+	}
+});
+els.wmImgInput.addEventListener("input", () => {
+	const v = els.wmImgInput.value.trim();
+	if (/^https?:\/\//i.test(v)) {
+		adv.wm = { remoteImg: v };
+		els.wmTextInput.value = "";
+	} else if (v === "" && adv.wm && !adv.wm.sessionPath) {
+		adv.wm = null;
+	}
+});
 
 /* ---------------- URL 添加（远程图片） ---------------- */
 function addUrls() {
@@ -237,9 +443,13 @@ function buildRow(it) {
 function paintRow(li, it) {
 	const { status, result, error } = it;
 	const params = it.params || {};
-	const thumb = it.thumbUrl
+	// 完成项用压缩结果图做缩略图，可点击放大预览
+	let thumb = it.thumbUrl
 		? `<img class="thumb" src="${it.thumbUrl}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'thumb-placeholder',textContent:'✕'}))" />`
 		: `<div class="thumb-placeholder">${extOf(it.relPath) || "?"}</div>`;
+	if (status === "done" && result) {
+		thumb = `<button type="button" class="thumb-btn" data-act="preview" title="点击对比原图"><img class="thumb" src="${result.url}" alt="" loading="lazy" /></button>`;
+	}
 
 	let ratio = `<span class="ratio pending">—</span>`;
 	let sizes = `<span class="sizes">${it.size ? fmt(it.size) : "—"}</span>`;
@@ -264,7 +474,8 @@ function paintRow(li, it) {
 	const subParts = [
 		`${it.size ? fmt(it.size) : "—"} · ${extOf(it.relPath).toUpperCase() || "URL"}${modeLabel(it.mode)}`,
 	];
-	if (status === "done" && result) subParts.push(`q${params.quality} · ${result.format}`);
+	if (status === "running") subParts.push(paramsSummary(params));
+	if (status === "done" && result) subParts.push(paramsSummary(params));
 	if (status === "failed" && error) subParts.push(`<span class="err-msg">${esc(error)}</span>`);
 
 	li.innerHTML = `
@@ -328,11 +539,69 @@ els.list.addEventListener("click", (e) => {
 		paintRow(li, it);
 		updateSummary();
 		pump();
+	} else if (btn.dataset.act === "preview") {
+		openPreview(it);
 	}
 });
 
+/* ---------------- 前后对比预览 ---------------- */
+function sourcePreviewUrl(it) {
+	if (it.mode === "path") return `/api/preview?path=${encodeURIComponent(it.absPath)}`;
+	if (it.mode === "url") return it.url;
+	return it.thumbUrl || "";
+}
+function openPreview(it) {
+	const r = it.result;
+	if (!r) return;
+	els.previewLayer.hidden = false;
+	document.body.style.overflow = "hidden";
+	els.previewBeforeImg.src = sourcePreviewUrl(it) || "";
+	els.previewAfterImg.src = r.url;
+	els.previewName.textContent = it.relPath;
+	els.previewBeforeMeta.textContent = fmt(r.beforeBytes);
+	els.previewAfterMeta.textContent = `${fmt(r.afterBytes)} (${r.width}×${r.height})`;
+	let saved = "";
+	if (r.beforeBytes > 0) {
+		const pct = ((1 - r.afterBytes / r.beforeBytes) * 100).toFixed(1);
+		saved = pct >= 0 ? `省 ${pct}%` : `增 +${(-pct).toFixed(1)}%`;
+	}
+	els.previewVerdict.textContent = saved;
+}
+function initPreview() {
+	els.previewLayer = document.getElementById("previewLayer");
+	if (!els.previewLayer) return; // 元素尚未就绪（可能用旧缓存 HTML）——静默跳过，刷新后生效
+	els.previewBeforeImg = document.getElementById("pBeforeImg");
+	els.previewAfterImg = document.getElementById("pAfterImg");
+	els.previewName = document.getElementById("pName");
+	els.previewBeforeMeta = document.getElementById("pBeforeMeta");
+	els.previewAfterMeta = document.getElementById("pAfterMeta");
+	els.previewVerdict = document.getElementById("pVerdict");
+	document.getElementById("pClose").addEventListener("click", closePreview);
+	els.previewLayer.addEventListener("click", (e) => {
+		if (e.target === els.previewLayer) closePreview();
+	});
+	document.addEventListener("keydown", (e) => {
+		if (e.key === "Escape" && !els.previewLayer.hidden) closePreview();
+	});
+}
+function closePreview() {
+	els.previewLayer.hidden = true;
+	document.body.style.overflow = "";
+}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initPreview);
+else initPreview();
+
 /* ---------------- 压缩队列 ---------------- */
-els.startBtn.addEventListener("click", pump);
+els.startBtn.addEventListener("click", () => {
+	const probe = snapshotParams();
+	const err = validateParams(probe);
+	if (err) {
+		alert(`参数有误：${err}`);
+		els.advPanel.hidden = false; // 自动展开方便修改
+		return;
+	}
+	pump();
+});
 
 function pump() {
 	const queue = items.filter((i) => i.status === "queued");
@@ -355,25 +624,28 @@ async function startItem(it) {
 
 	try {
 		let res;
-		if (it.mode === "path") {
-			res = await fetch("/api/compress-path", {
+		if (it.mode === "path" || it.mode === "url") {
+			const endpoint = it.mode === "path" ? "/api/compress-path" : "/api/compress-url";
+			const body = it.mode === "path" ? { path: it.absPath, relPath: it.relPath } : { url: it.url };
+			res = await fetch(endpoint, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ path: it.absPath, relPath: it.relPath, ...it.params }),
-			});
-		} else if (it.mode === "url") {
-			res = await fetch("/api/compress-url", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ url: it.url, ...it.params }),
+				body: JSON.stringify({ ...body, ...it.params }),
 			});
 		} else {
+			// 拖拽模式：水印/元数据等对象参数放 query 的 watermark JSON；文本参数逐个传
 			const q = new URLSearchParams({
 				name: it.file.name,
 				relPath: it.relPath,
 				quality: it.params.quality,
 				format: it.params.format,
 			});
+			if (it.params.resize) q.set("resize", it.params.resize);
+			if (it.params.crop) q.set("crop", it.params.crop);
+			if (it.params.rotate) q.set("rotate", it.params.rotate);
+			if (it.params.lossless) q.set("lossless", "1");
+			if (it.params.keepMeta) q.set("keepMeta", "1");
+			if (it.params.watermark) q.set("watermark", JSON.stringify(it.params.watermark));
 			res = await fetch(`/api/compress?${q}`, {
 				method: "POST",
 				headers: { "Content-Type": "application/octet-stream" },
