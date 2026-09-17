@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import Sharp from "sharp";
-import { compressImage } from "../lib/compress.js";
+import { compressImage } from "@wgl-m/compress";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "compress-img-test-"));
 process.on("exit", () => fs.rmSync(tmp, { recursive: true, force: true }));

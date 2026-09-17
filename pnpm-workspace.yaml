@@ -1,6 +1,8 @@
 packages:
   # 本项目
   - '.'
-  # 跨仓消费 wgl-monorepo 的 @wgl-m/down-img（未发版时的本地 workspace 链接，
-  # 见 wgl-monorepo/docs/local-usage.md；发版后移除本行并改为正式依赖）
+  # 跨仓消费 wgl-monorepo 的 @wgl-m/* 未发版包（本地 workspace 链接，
+  # 见 wgl-monorepo/docs/local-usage.md；发版后移除并改为正式依赖）。
+  # 压缩管线复用 @wgl-m/compress（单一实现），URL 下载复用 @wgl-m/down-img。
+  - '../wgl-monorepo/packages/compress'
   - '../wgl-monorepo/packages/down-img'

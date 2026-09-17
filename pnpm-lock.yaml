@@ -8,12 +8,31 @@ importers:
 
   .:
     dependencies:
+      '@wgl-m/compress':
+        specifier: workspace:*
+        version: link:../wgl-monorepo/packages/compress
       '@wgl-m/down-img':
         specifier: workspace:*
         version: link:../wgl-monorepo/packages/down-img
       sharp:
         specifier: ^0.35.4
-        version: 0.35.4
+        version: 0.35.4(@types/node@22.20.2)
+
+  ../wgl-monorepo/packages/compress:
+    dependencies:
+      sharp:
+        specifier: ^0.35.4
+        version: 0.35.4(@types/node@22.20.2)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.2
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(typescript@5.9.3)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
 
   ../wgl-monorepo/packages/down-img:
     devDependencies:
@@ -1151,7 +1170,7 @@ snapshots:
 
   semver@7.8.5: {}
 
-  sharp@0.35.4:
+  sharp@0.35.4(@types/node@22.20.2):
     dependencies:
       '@img/colour': 1.1.0
       detect-libc: 2.1.2
@@ -1182,6 +1201,7 @@ snapshots:
       '@img/sharp-win32-arm64': 0.35.4
       '@img/sharp-win32-ia32': 0.35.4
       '@img/sharp-win32-x64': 0.35.4
+      '@types/node': 22.20.2
 
   source-map@0.7.6: {}
 
